@@ -1,47 +1,54 @@
 const ffmpeg = require('fluent-ffmpeg');
 const ffmpegPath = require('ffmpeg-static');
+const ffprobePath = require('ffprobe-static').path;
 const path = require('path');
 const fs = require('fs');
 
 // Configura o caminho do FFmpeg para usar o binário do ffmpeg-static
 ffmpeg.setFfmpegPath(ffmpegPath);
+ffmpeg.setFfprobePath(ffprobePath);
+
+// Função para obter a duração do vídeo
+function getVideoDuration(inputPath) {
+    return new Promise((resolve, reject) => {
+        ffmpeg.ffprobe(inputPath, (err, metadata) => {
+            if (err) return reject(`Erro ao obter duração: ${err.message}`);
+            resolve(metadata.format.duration);
+        });
+    });
+}
 
 // Função para converter um vídeo .mov para .mp4
-function convertVideo(inputPath) {
-    // Verifica se o arquivo de entrada existe
+async function convertVideo(inputPath) {
+    // Verifica se o arquivo de entrada existe e é .mov
     if (!fs.existsSync(inputPath)) {
         console.log(`Arquivo não encontrado: ${inputPath}`);
         return;
     }
-
-    // Verifica se o arquivo de entrada é um .mov
     if (path.extname(inputPath).toLowerCase() !== '.mov') {
         console.log("Por favor, forneça um arquivo com extensão .mov");
         return;
     }
 
-    // Define o caminho de saída com extensão .mp4
     const outputPath = path.join(path.dirname(inputPath), `${path.basename(inputPath, '.mov')}.mp4`);
+    let duration;
 
-    var duration;
+    try {
+        // Obtenha a duração antes da conversão
+        duration = await getVideoDuration(inputPath);
+    } catch (err) {
+        console.error(err);
+        return;
+    }
 
-  
-    // Executa a conversão com o FFmpeg
+    // Inicia a conversão com monitoramento do progresso
     ffmpeg(inputPath)
         .output(outputPath)
-        .on('codecData', (data) => {
-            const durationParts = data.duration.split(':').map(Number)
-            duration = durationParts[0] * 3600 + durationParts[1] * 60 + durationParts[2]
-        })
         .on('progress', (progress) => {
-            // Converte o timemark para segundos
             const timeParts = progress.timemark.split(':').map(Number);
             const elapsedSeconds = timeParts[0] * 3600 + timeParts[1] * 60 + timeParts[2];
-         
-            
-            // Calcula a porcentagem com base no tempo decorrido e na duração total
             const percentComplete = Math.min(Math.round((elapsedSeconds / duration) * 100), 100);
-            
+
             process.stdout.clearLine();
             process.stdout.cursorTo(0);
             process.stdout.write(`Convertendo: ${percentComplete}% concluído`);
@@ -57,7 +64,6 @@ function convertVideo(inputPath) {
 
 // Obtém o caminho do arquivo de entrada a partir dos argumentos da linha de comando
 const inputPath = process.argv[2];
-
 if (!inputPath) {
     console.log("Uso: node convert.js <caminho_do_arquivo.mov>");
 } else {
