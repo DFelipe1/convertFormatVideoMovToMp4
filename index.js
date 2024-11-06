@@ -23,12 +23,25 @@ function convertVideo(inputPath) {
     // Define o caminho de saída com extensão .mp4
     const outputPath = path.join(path.dirname(inputPath), `${path.basename(inputPath, '.mov')}.mp4`);
 
+    var duration;
+
+  
     // Executa a conversão com o FFmpeg
     ffmpeg(inputPath)
         .output(outputPath)
+        .on('codecData', (data) => {
+            const durationParts = data.duration.split(':').map(Number)
+            duration = durationParts[0] * 3600 + durationParts[1] * 60 + durationParts[2]
+        })
         .on('progress', (progress) => {
-            // Mostra o progresso da conversão
-            const percentComplete = Math.round(progress.percent);
+            // Converte o timemark para segundos
+            const timeParts = progress.timemark.split(':').map(Number);
+            const elapsedSeconds = timeParts[0] * 3600 + timeParts[1] * 60 + timeParts[2];
+         
+            
+            // Calcula a porcentagem com base no tempo decorrido e na duração total
+            const percentComplete = Math.min(Math.round((elapsedSeconds / duration) * 100), 100);
+            
             process.stdout.clearLine();
             process.stdout.cursorTo(0);
             process.stdout.write(`Convertendo: ${percentComplete}% concluído`);
